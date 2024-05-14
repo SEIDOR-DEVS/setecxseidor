@@ -30,6 +30,8 @@ app.post('/', async (req, res) => {
                 await updateStatusColumn(targetBoardId, itemId, columnId, value);
             } else if (columnType === "dropdown") {
                 await updateDropdownColumn(targetBoardId, itemId, columnId, value);
+            } else if (columnType === "numeric") {
+                await updateNumberColumn(targetBoardId, itemId, columnId, value);
             } else {
                 await updateTextColumn(targetBoardId, itemId, columnId, value);
             }
@@ -189,6 +191,43 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour de la colonne de dropdown:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
+
+async function updateNumberColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
+
+    if (value && value.value !== undefined && typeof value.value === 'number') {
+        formattedValue = `${value.value}`;
+    }
+
+    const mutation = `
+        mutation {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": \\"${formattedValue}\\"}" ) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de chiffres mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de chiffres:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
 
