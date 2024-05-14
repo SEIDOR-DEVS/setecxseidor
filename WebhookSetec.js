@@ -9,26 +9,35 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
 
-app.post('/webhook', async (req, res) => {
-    console.log("Webhook reçu :", JSON.stringify(req.body, null, 2));
+const targetBoardId = 6585828609;  // ID du tableau cible
+
+app.post('/', async (req, res) => {
+    console.log("Webhook reçu:", JSON.stringify(req.body, null, 2));
+
+    // Vérifier si le corps de la requête contient un champ challenge
+    if (req.body.challenge) {
+        console.log("Répondre au challenge du webhook");
+        return res.status(200).json({ challenge: req.body.challenge });
+    }
 
     if (req.body.event) {
         const { pulseName, columnId, value, columnType } = req.body.event;
-        const targetBoardId = 6134551495;  // ID du tableau cible
 
         const itemId = await findItemByName(targetBoardId, pulseName);
         if (itemId) {
-            console.log(`Élément trouvé, ID : ${itemId}, mise à jour de la colonne.`);
-            await updateColumnValue(targetBoardId, itemId, columnId, value, columnType);
+            console.log(`Élément trouvé, ID: ${itemId}, mise à jour de la colonne.`);
+            if (columnType === "color") {
+                await updateStatusColumn(targetBoardId, itemId, columnId, value);
+            } else {
+                await updateTextColumn(targetBoardId, itemId, columnId, value);
+            }
         } else {
-            console.log(`Aucun élément trouvé avec le nom '${pulseName}' pour mise à jour.`);
+            console.log(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
         }
     }
 
     res.status(200).send('Webhook traité');
 });
-
-
 
 async function findItemByName(boardId, itemName) {
     const query = JSON.stringify({
@@ -56,27 +65,24 @@ async function findItemByName(boardId, itemName) {
 
     try {
         const response = await axios(config);
-        console.log("Réponse de la recherche d'éléments :", JSON.stringify(response.data));
+        console.log("Réponse de la recherche d'éléments:", JSON.stringify(response.data));
         if (response.data.data && response.data.data.items_page_by_column_values && response.data.data.items_page_by_column_values.items.length > 0) {
-            return response.data.data.items_page_by_column_values.items[0].id;  // Renvoie l'ID du premier élément qui correspond
+            return response.data.data.items_page_by_column_values.items[0].id;  // Retourne l'ID du premier élément correspondant
         } else {
-            console.log("Aucun élément trouvé avec ce nom :", itemName);
+            console.log("Aucun élément trouvé avec ce nom:", itemName);
             return null;
         }
     } catch (error) {
-        console.error("Erreur lors de la recherche d'élément par nom :", error);
+        console.error("Erreur lors de la recherche de l'élément par nom:", error);
         return null;
     }
 }
 
-async function updateColumnValue(boardId, itemId, columnId, value) {
-    let formattedValue;
+async function updateTextColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
 
-    // Vérifier si la valeur est présente et non nulle, sinon utiliser une chaîne vide
-    if (value && value.value !== null) {
-        formattedValue = `"${value.value.replace(/"/g, '\\"')}"`; // Assurer que le texte est correctement échappé
-    } else {
-        formattedValue = `""`; // Envoyer une chaîne vide si la valeur est nulle
+    if (value && value.value !== undefined && typeof value.value === 'string') {
+        formattedValue = `"${value.value.replace(/"/g, '\\"')}"`;
     }
 
     const mutation = `
@@ -94,16 +100,59 @@ async function updateColumnValue(boardId, itemId, columnId, value) {
             'Authorization': API_KEY,
             'Content-Type': 'application/json'
         },
-        data: JSON.stringify({ query: mutation }) // Encapsuler la mutation dans un objet JSON
+        data: JSON.stringify({ query: mutation })
     };
 
     try {
         const response = await axios(config);
-        console.log("Colonne mise à jour avec succès :", JSON.stringify(response.data));
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de texte mise à jour avec succès:", JSON.stringify(response.data));
+        }
     } catch (error) {
-        console.error("Erreur lors de la mise à jour de la colonne :", JSON.stringify(error.response ? error.response.data : error.message));
+        console.error("Erreur lors de la mise à jour de la colonne de texte:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
+
+async function updateStatusColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+
+    if (value && value.label && value.label.text !== undefined) {
+        formattedValue = JSON.stringify({ [columnId]: { label: value.label.text } });
+    }
+
+    const mutation = `
+        mutation {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de statut mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de statut:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
+
+
 
 
 
