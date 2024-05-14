@@ -28,6 +28,8 @@ app.post('/', async (req, res) => {
             console.log(`Élément trouvé, ID: ${itemId}, mise à jour de la colonne.`);
             if (columnType === "color") {
                 await updateStatusColumn(targetBoardId, itemId, columnId, value);
+            } else if (columnType === "dropdown") {
+                await updateDropdownColumn(targetBoardId, itemId, columnId, value);
             } else {
                 await updateTextColumn(targetBoardId, itemId, columnId, value);
             }
@@ -152,9 +154,43 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
     }
 }
 
+async function updateDropdownColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
 
+    if (value && value.chosenValues && value.chosenValues.length > 0) {
+        const chosenValuesText = value.chosenValues.map(v => v.name).join(", ");
+        formattedValue = `"${chosenValuesText.replace(/"/g, '\\"')}"`;
+    }
 
+    const mutation = `
+        mutation {
+            change_simple_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: ${formattedValue}, create_labels_if_missing: true) {
+                id
+            }
+        }
+    `;
 
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de dropdown mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de dropdown:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
 
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
