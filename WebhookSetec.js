@@ -26,6 +26,7 @@ app.post('/', async (req, res) => {
 
     if (req.body.event) {
         const { pulseName, columnId, value, columnType } = req.body.event;
+        console.log(`Handling column update: pulseName=${pulseName}, columnId=${columnId}, columnType=${columnType}, value=${JSON.stringify(value)}`);
 
         const itemId = await findItemByName(targetBoardId, pulseName);
         if (itemId) {
@@ -40,6 +41,8 @@ app.post('/', async (req, res) => {
                 await updateTimelineColumn(targetBoardId, itemId, columnId, value);
             } else if (columnType === "long-text") {
                 await updateLongTextColumn(targetBoardId, itemId, columnId, value);
+            } else if (columnType === "multiple-person") {
+                await updatePeopleColumn(targetBoardId, itemId, columnId, value);
             } else {
                 await updateTextColumn(targetBoardId, itemId, columnId, value);
             }
@@ -50,6 +53,7 @@ app.post('/', async (req, res) => {
 
     res.status(200).send('Webhook traité');
 });
+
 
 async function findItemByName(boardId, itemName) {
     const query = JSON.stringify({
@@ -314,6 +318,45 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour de la colonne de long texte:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
+
+async function updatePeopleColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+
+    if (value && value.personsAndTeams && value.personsAndTeams.length > 0) {
+        formattedValue = JSON.stringify({ [columnId]: { personsAndTeams: value.personsAndTeams } });
+    }
+
+    console.log(`Formatted value for people column ${columnId}:`, formattedValue);
+
+    const mutation = `
+        mutation {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de personnes mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de personnes:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
 
