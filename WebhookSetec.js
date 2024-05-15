@@ -285,6 +285,8 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         formattedValue = JSON.stringify({ [columnId]: { text: value.text } });
     }
 
+    console.log(`Formatted value for long text column ${columnId}:`, formattedValue);
+
     const mutation = `
         mutation {
             change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
@@ -314,6 +316,7 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de long texte:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
+
 
 
 app.listen(PORT, () => {
