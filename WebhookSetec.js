@@ -9,7 +9,11 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
 
-const targetBoardId = 6585828609;  // ID du tableau cible
+//const targetBoardId = 6585828609;  // tableau cible TEST
+const targetBoardId = 1476500931;  // ID du tableau CONSO SETEC
+
+
+
 
 app.post('/', async (req, res) => {
     console.log("Webhook reçu:", JSON.stringify(req.body, null, 2));
@@ -34,6 +38,8 @@ app.post('/', async (req, res) => {
                 await updateNumberColumn(targetBoardId, itemId, columnId, value);
             } else if (columnType === "timerange") {
                 await updateTimelineColumn(targetBoardId, itemId, columnId, value);
+            } else if (columnType === "long-text") {
+                await updateLongTextColumn(targetBoardId, itemId, columnId, value);
             } else {
                 await updateTextColumn(targetBoardId, itemId, columnId, value);
             }
@@ -271,6 +277,44 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de timeline:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
+
+async function updateLongTextColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+
+    if (value && value.text) {
+        formattedValue = JSON.stringify({ [columnId]: { text: value.text } });
+    }
+
+    const mutation = `
+        mutation {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de long texte mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de long texte:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
+
 
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
