@@ -32,6 +32,8 @@ app.post('/', async (req, res) => {
                 await updateDropdownColumn(targetBoardId, itemId, columnId, value);
             } else if (columnType === "numeric") {
                 await updateNumberColumn(targetBoardId, itemId, columnId, value);
+            } else if (columnType === "timerange") {
+                await updateTimelineColumn(targetBoardId, itemId, columnId, value);
             } else {
                 await updateTextColumn(targetBoardId, itemId, columnId, value);
             }
@@ -228,6 +230,45 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour de la colonne de chiffres:", JSON.stringify(error.response ? error.response.data : error.message));
+    }
+}
+
+
+
+async function updateTimelineColumn(boardId, itemId, columnId, value) {
+    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+
+    if (value && value.from && value.to) {
+        formattedValue = JSON.stringify({ [columnId]: { from: value.from, to: value.to } });
+    }
+
+    const mutation = `
+        mutation {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': API_KEY,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await axios(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+        } else {
+            console.log("Colonne de timeline mise à jour avec succès:", JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la colonne de timeline:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
 
