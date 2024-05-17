@@ -9,16 +9,50 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
 
-//const targetBoardId = 6585828609;  // tableau cible TEST
+// Almacenar los logs en memoria (para simplicidad; en producción considerar otros métodos)
+const logs = [];
+
+// Endpoint para servir el archivo HTML
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
+
+// Endpoint para enviar logs usando SSE
+app.get('/logs', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
+
+    // Función para enviar nuevos logs
+    const sendLog = (log) => res.write(`data: ${log}\n\n`);
+
+    // Agregar función a un arreglo para que pueda ser llamada más tarde
+    logListeners.push(sendLog);
+
+    req.on('close', () => {
+        // Eliminar la función cuando la conexión se cierra
+        logListeners = logListeners.filter(listener => listener !== sendLog);
+    });
+});
+
+// Arreglo para almacenar las funciones que envían logs
+let logListeners = [];
+
+const addLog = (log) => {
+    logs.push(log);
+    if (logs.length > 100) logs.shift(); // Mantener solo los últimos 100 logs
+    logListeners.forEach(listener => listener(log));
+};
+
 const targetBoardId = 1476500931;  // ID du tableau CONSO SETEC
 
-
-
-
 app.post('/', async (req, res) => {
-    console.log("Webhook reçu:", JSON.stringify(req.body, null, 2));
+    const log = `Webhook reçu: ${JSON.stringify(req.body, null, 2)}`;
+    console.log(log);
+    addLog(log);
 
-    // Vérifier si le corps de la requête contient un champ challenge
     if (req.body.challenge) {
         console.log("Répondre au challenge du webhook");
         return res.status(200).json({ challenge: req.body.challenge });
@@ -26,11 +60,14 @@ app.post('/', async (req, res) => {
 
     if (req.body.event) {
         const { pulseName, columnId, value, columnType } = req.body.event;
-        console.log(`Handling column update: pulseName=${pulseName}, columnId=${columnId}, columnType=${columnType}, value=${JSON.stringify(value)}`);
+        const log = `Handling column update: pulseName=${pulseName}, columnId=${columnId}, columnType=${columnType}, value=${JSON.stringify(value)}`;
+        console.log(log);
+        addLog(log);
 
         const itemId = await findItemByName(targetBoardId, pulseName);
         if (itemId) {
             console.log(`Élément trouvé, ID: ${itemId}, mise à jour de la colonne.`);
+            addLog(`Élément trouvé, ID: ${itemId}, mise à jour de la colonne.`);
             if (columnType === "color") {
                 await updateStatusColumn(targetBoardId, itemId, columnId, value);
             } else if (columnType === "dropdown") {
@@ -48,6 +85,7 @@ app.post('/', async (req, res) => {
             }
         } else {
             console.log(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
+            addLog(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
         }
     }
 

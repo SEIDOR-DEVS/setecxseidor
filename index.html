@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook Logs</title>
+    <style>
+        #logs {
+            white-space: pre-wrap; /* Para preservar los saltos de línea */
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            max-height: 500px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body>
+<h1>Webhook Logs</h1>
+<div id="logs"></div>
+
+<script>
+    const eventSource = new EventSource('/logs');
+    eventSource.onmessage = function(event) {
+        const logsDiv = document.getElementById('logs');
+        logsDiv.textContent += event.data + '\\n';
+    };
+</script>
+</body>
+</html>
