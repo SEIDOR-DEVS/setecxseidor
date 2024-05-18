@@ -11,56 +11,10 @@ const API_URL = process.env.API_URL;
 
 // Almacenar los logs en memoria (para simplicidad; en producción considerar otros métodos)
 const logs = [];
-let logListeners = [];
 
-// Función para agregar un log y notificar a los oyentes
-const addLog = (log) => {
-    logs.push(log);
-    if (logs.length > 100) logs.shift();
-    logListeners.forEach(listener => listener(log));
-};
-
-// Endpoint para servir el archivo HTML y los logs usando SSE
+// Endpoint para servir el archivo HTML
 app.get('/', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    res.write(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Logs</title>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                #logs { white-space: pre-wrap; }
-            </style>
-        </head>
-        <body>
-            <h1>Logs</h1>
-            <div id="logs"></div>
-            <script>
-                const eventSource = new EventSource('/logs');
-                eventSource.onmessage = function(event) {
-                    const logs = document.getElementById('logs');
-                    logs.innerHTML += event.data + '\\n';
-                };
-            </script>
-        </body>
-        </html>
-    `);
-
-    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
-
-    const sendLog = (log) => res.write(`data: ${log}\n\n`);
-
-    logListeners.push(sendLog);
-
-    req.on('close', () => {
-        logListeners = logListeners.filter(listener => listener !== sendLog);
-    });
+    res.sendFile(__dirname + '/index.html');
 });
 
 // Endpoint para enviar logs usando SSE
@@ -69,8 +23,7 @@ app.get('/logs', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Enviar logs anteriores
-    logs.forEach(log => res.write(`data: ${log}\n\n`));
+    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
 
     // Función para enviar nuevos logs
     const sendLog = (log) => res.write(`data: ${log}\n\n`);
@@ -78,16 +31,22 @@ app.get('/logs', (req, res) => {
     // Agregar función a un arreglo para que pueda ser llamada más tarde
     logListeners.push(sendLog);
 
-    // Eliminar la función cuando la conexión se cierra
     req.on('close', () => {
+        // Eliminar la función cuando la conexión se cierra
         logListeners = logListeners.filter(listener => listener !== sendLog);
     });
 });
 
-// ID del tablero
-const targetBoardId = 1476500931;
+let logListeners = [];
 
-// Gestionar los webhooks
+const addLog = (log) => {
+    logs.push(log);
+    if (logs.length > 100) logs.shift();
+    logListeners.forEach(listener => listener(log));
+};
+
+const targetBoardId = 1476500931;  // ID du tableau CONSO SETEC
+
 app.post('/', async (req, res) => {
     const log = `Webhook reçu: ${JSON.stringify(req.body, null, 2)}`;
     console.log(log);
@@ -131,7 +90,7 @@ app.post('/', async (req, res) => {
     res.status(200).send('Webhook traité');
 });
 
-// Fonction pour trouver un élément par son nom
+
 async function findItemByName(boardId, itemName) {
     const query = JSON.stringify({
         query: `
@@ -171,7 +130,6 @@ async function findItemByName(boardId, itemName) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de texte
 async function updateTextColumn(boardId, itemId, columnId, value) {
     let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
 
@@ -209,7 +167,6 @@ async function updateTextColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de statut
 async function updateStatusColumn(boardId, itemId, columnId, value) {
     let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
 
@@ -247,7 +204,6 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de dropdown
 async function updateDropdownColumn(boardId, itemId, columnId, value) {
     let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
 
@@ -286,18 +242,17 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de chiffres
 async function updateNumberColumn(boardId, itemId, columnId, value) {
     let formattedValue;
 
     if (value && value.value !== undefined) {
-        // Si le valeur n'est pas null, le formater correctement
+        // Si el valor no es null, lo formateamos adecuadamente
         formattedValue = value.value !== null ? `${value.value}` : 'null';
     } else {
-        formattedValue = 'null'; // Valeur par défaut si la colonne est vide
+        formattedValue = 'null'; // Valor por defecto si la columna está vacía
     }
 
-    // Construction de la mutation
+    // Construcción de la mutación
     const mutation = `
         mutation {
             change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": ${formattedValue}}" ) {
@@ -328,7 +283,9 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de timeline
+
+
+
 async function updateTimelineColumn(boardId, itemId, columnId, value) {
     let mutation;
 
@@ -343,7 +300,7 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
             }
         `;
     } else {
-        // Effacer la colonne de timeline
+        // Clear the timeline column
         mutation = `
             mutation {
                 change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": null}" ) {
@@ -375,9 +332,10 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de long texte
+
+
 async function updateLongTextColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valeur par défaut si la colonne est vide
+    let formattedValue = '{}'; // Valor por defecto si la columna está vacía
 
     if (value && value.text !== undefined) {
         formattedValue = JSON.stringify({ [columnId]: { text: value.text || "" } });
@@ -415,7 +373,6 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Fonction pour mettre à jour une colonne de personnes
 async function updatePeopleColumn(boardId, itemId, columnId, value) {
     let mutation;
 
@@ -430,7 +387,7 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
             }
         `;
     } else {
-        // Effacer toutes les personnes de la colonne
+        // Clear all people from the column
         mutation = `
             mutation {
                 change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: "{\\"clear_all\\":true}") {
@@ -462,8 +419,7 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
     }
 }
 
-// Démarrer le serveur
+
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
 });
-
