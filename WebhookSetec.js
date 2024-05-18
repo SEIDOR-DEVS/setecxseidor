@@ -363,21 +363,28 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
 }
 
 async function updatePeopleColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let mutation;
 
     if (value && value.personsAndTeams && value.personsAndTeams.length > 0) {
-        formattedValue = JSON.stringify({ [columnId]: { personsAndTeams: value.personsAndTeams } });
-    }
-
-    console.log(`Formatted value for people column ${columnId}:`, formattedValue);
-
-    const mutation = `
-        mutation {
-            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
-                id
+        const formattedValue = JSON.stringify({ personsAndTeams: value.personsAndTeams });
+        console.log(`Formatted value for people column ${columnId}:`, formattedValue);
+        mutation = `
+            mutation {
+                change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${JSON.stringify({ [columnId]: { personsAndTeams: value.personsAndTeams } }).replace(/"/g, '\\"')}" ) {
+                    id
+                }
             }
-        }
-    `;
+        `;
+    } else {
+        // Clear all people from the column
+        mutation = `
+            mutation {
+                change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: "{\\"clear_all\\":true}") {
+                    id
+                }
+            }
+        `;
+    }
 
     const config = {
         method: 'post',
@@ -400,7 +407,6 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de personnes:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
-
 
 
 app.listen(PORT, () => {
