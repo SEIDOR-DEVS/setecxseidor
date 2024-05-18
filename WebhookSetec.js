@@ -37,12 +37,11 @@ app.get('/logs', (req, res) => {
     });
 });
 
-// Arreglo para almacenar las funciones que envían logs
 let logListeners = [];
 
 const addLog = (log) => {
     logs.push(log);
-    if (logs.length > 100) logs.shift(); // Mantener solo los últimos 100 logs
+    if (logs.length > 100) logs.shift();
     logListeners.forEach(listener => listener(log));
 };
 
@@ -88,7 +87,6 @@ app.post('/', async (req, res) => {
             addLog(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
         }
     }
-
     res.status(200).send('Webhook traité');
 });
 
@@ -245,15 +243,19 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
 }
 
 async function updateNumberColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let formattedValue;
 
-    if (value && value.value !== undefined && typeof value.value === 'number') {
-        formattedValue = `${value.value}`;
+    if (value && value.value !== undefined) {
+        // Si el valor no es null, lo formateamos adecuadamente
+        formattedValue = value.value !== null ? `${value.value}` : 'null';
+    } else {
+        formattedValue = 'null'; // Valor por defecto si la columna está vacía
     }
 
+    // Construcción de la mutación
     const mutation = `
         mutation {
-            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": \\"${formattedValue}\\"}" ) {
+            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": ${formattedValue}}" ) {
                 id
             }
         }
@@ -280,6 +282,7 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de chiffres:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
+
 
 
 
@@ -321,10 +324,10 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
 }
 
 async function updateLongTextColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let formattedValue = '{}'; // Valor por defecto si la columna está vacía
 
-    if (value && value.text) {
-        formattedValue = JSON.stringify({ [columnId]: { text: value.text } });
+    if (value && value.text !== undefined) {
+        formattedValue = JSON.stringify({ [columnId]: { text: value.text || "" } });
     }
 
     console.log(`Formatted value for long text column ${columnId}:`, formattedValue);
