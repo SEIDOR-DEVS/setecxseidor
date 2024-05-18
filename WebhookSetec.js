@@ -11,10 +11,56 @@ const API_URL = process.env.API_URL;
 
 // Almacenar los logs en memoria (para simplicidad; en producción considerar otros métodos)
 const logs = [];
+let logListeners = [];
 
-// Endpoint para servir el archivo HTML
+// Función para agregar un log y notificar a los oyentes
+const addLog = (log) => {
+    logs.push(log);
+    if (logs.length > 100) logs.shift();
+    logListeners.forEach(listener => listener(log));
+};
+
+// Endpoint para servir el archivo HTML y los logs usando SSE
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    res.write(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Logs</title>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                #logs { white-space: pre-wrap; }
+            </style>
+        </head>
+        <body>
+            <h1>Logs</h1>
+            <div id="logs"></div>
+            <script>
+                const eventSource = new EventSource('/logs');
+                eventSource.onmessage = function(event) {
+                    const logs = document.getElementById('logs');
+                    logs.innerHTML += event.data + '\\n';
+                };
+            </script>
+        </body>
+        </html>
+    `);
+
+    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
+
+    const sendLog = (log) => res.write(`data: ${log}\n\n`);
+
+    logListeners.push(sendLog);
+
+    req.on('close', () => {
+        logListeners = logListeners.filter(listener => listener !== sendLog);
+    });
 });
 
 // Endpoint para enviar logs usando SSE
@@ -23,7 +69,8 @@ app.get('/logs', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
+    // Enviar logs anteriores
+    logs.forEach(log => res.write(`data: ${log}\n\n`));
 
     // Función para enviar nuevos logs
     const sendLog = (log) => res.write(`data: ${log}\n\n`);
@@ -31,19 +78,11 @@ app.get('/logs', (req, res) => {
     // Agregar función a un arreglo para que pueda ser llamada más tarde
     logListeners.push(sendLog);
 
+    // Eliminar la función cuando la conexión se cierra
     req.on('close', () => {
-        // Eliminar la función cuando la conexión se cierra
         logListeners = logListeners.filter(listener => listener !== sendLog);
     });
 });
-
-let logListeners = [];
-
-const addLog = (log) => {
-    logs.push(log);
-    if (logs.length > 100) logs.shift();
-    logListeners.forEach(listener => listener(log));
-};
 
 const targetBoardId = 1476500931;  // ID du tableau CONSO SETEC
 
