@@ -287,19 +287,28 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
 
 
 async function updateTimelineColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let mutation;
 
     if (value && value.from && value.to) {
-        formattedValue = JSON.stringify({ [columnId]: { from: value.from, to: value.to } });
-    }
-
-    const mutation = `
-        mutation {
-            change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "${formattedValue.replace(/"/g, '\\"')}" ) {
-                id
+        const formattedValue = JSON.stringify({ [columnId]: { from: value.from, to: value.to } }).replace(/"/g, '\\"');
+        console.log(`Formatted value for timeline column ${columnId}:`, formattedValue);
+        mutation = `
+            mutation {
+                change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": {\\"from\\": \\"${value.from}\\", \\"to\\": \\"${value.to}\\"}}" ) {
+                    id
+                }
             }
-        }
-    `;
+        `;
+    } else {
+        // Clear the timeline column
+        mutation = `
+            mutation {
+                change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": null}" ) {
+                    id
+                }
+            }
+        `;
+    }
 
     const config = {
         method: 'post',
@@ -322,6 +331,8 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de timeline:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
+
+
 
 async function updateLongTextColumn(boardId, itemId, columnId, value) {
     let formattedValue = '{}'; // Valor por defecto si la columna está vacía
