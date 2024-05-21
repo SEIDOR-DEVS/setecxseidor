@@ -8,6 +8,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
+const targetBoardId = 1476500931;  // ID del tablero CONSO SETEC
 
 if (!API_KEY || !API_URL) {
     console.error("API_KEY or API_URL is not defined in the environment variables.");
@@ -185,6 +186,7 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
     let formattedValue = '{}';
 
     if (value && value.label && value.label.text !== undefined) {
+        formattedValue = JSON.stringify({ [columnId]: { label: value.label.text } });
         formattedValue = JSON.stringify({ [columnId]: { label: value.label.text } });
     }
 
