@@ -8,7 +8,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
-const targetBoardId = 1476500931;  // ID del tablero CONSO SETEC
+const targetBoardId = 1476500931;  // ID tableau CONSO SETEC
 
 if (!API_KEY || !API_URL) {
     console.error("API_KEY or API_URL is not defined in the environment variables.");
