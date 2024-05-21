@@ -9,30 +9,29 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const API_URL = process.env.API_URL;
 
-// Almacenar los logs en memoria (para simplicidad; en producción considerar otros métodos)
+if (!API_KEY || !API_URL) {
+    console.error("API_KEY or API_URL is not defined in the environment variables.");
+    process.exit(1);
+}
+
 const logs = [];
 
-// Endpoint para servir el archivo HTML
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// Endpoint para enviar logs usando SSE
 app.get('/logs', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    logs.forEach(log => res.write(`data: ${log}\n\n`)); // Enviar logs anteriores
+    logs.forEach(log => res.write(`data: ${log}\n\n`));
 
-    // Función para enviar nuevos logs
     const sendLog = (log) => res.write(`data: ${log}\n\n`);
 
-    // Agregar función a un arreglo para que pueda ser llamada más tarde
     logListeners.push(sendLog);
 
     req.on('close', () => {
-        // Eliminar la función cuando la conexión se cierra
         logListeners = logListeners.filter(listener => listener !== sendLog);
     });
 });
@@ -40,17 +39,31 @@ app.get('/logs', (req, res) => {
 let logListeners = [];
 
 const addLog = (log) => {
-    logs.push(log);
+    // Formatea el log de entrada
+    let formattedLog = log;
+
+    if (typeof log === 'object') {
+        formattedLog = JSON.stringify(log, null, 2);
+    }
+
+    formattedLog = formattedLog
+        .replace(/\n/g, '<br>')
+        .replace(/  /g, '&nbsp;&nbsp;')
+        .replace(/\\n/g, '<br>');
+
+    logs.push(formattedLog);
     if (logs.length > 100) logs.shift();
-    logListeners.forEach(listener => listener(log));
+    logListeners.forEach(listener => listener(formattedLog));
 };
 
-const targetBoardId = 1476500931;  // ID du tableau CONSO SETEC
-
 app.post('/', async (req, res) => {
-    const log = `Webhook reçu: ${JSON.stringify(req.body, null, 2)}`;
+    const log = {
+        event: req.body.event,
+        message: `Handling column update: pulseName=${req.body.event.pulseName}, columnId=${req.body.event.columnId}, columnType=${req.body.event.columnType}, value=${JSON.stringify(req.body.event.value)}`
+    };
     console.log(log);
-    addLog(log);
+    addLog(`Webhook reçu: ${JSON.stringify(req.body, null, 2)}`);
+    addLog(log.message);
 
     if (req.body.challenge) {
         console.log("Répondre au challenge du webhook");
@@ -90,12 +103,12 @@ app.post('/', async (req, res) => {
     res.status(200).send('Webhook traité');
 });
 
-
 async function findItemByName(boardId, itemName) {
+    const escapedItemName = itemName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const query = JSON.stringify({
         query: `
             query {
-                items_page_by_column_values (board_id: ${boardId}, columns: [{column_id: "name", column_values: ["${itemName}"]}]) {
+                items_page_by_column_values(board_id: ${boardId}, columns: [{column_id: "name", column_values: ["${escapedItemName}"]}]) {
                     items {
                         id
                         name
@@ -109,7 +122,7 @@ async function findItemByName(boardId, itemName) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: query
@@ -117,9 +130,10 @@ async function findItemByName(boardId, itemName) {
 
     try {
         const response = await axios(config);
-        console.log("Réponse de la recherche d'éléments:", JSON.stringify(response.data));
+        console.log("Réponse de la recherche d'éléments:", JSON.stringify(response.data, null, 2));
+        addLog(`Réponse de la recherche d'éléments: ${JSON.stringify(response.data, null, 2)}`);
         if (response.data.data && response.data.data.items_page_by_column_values && response.data.data.items_page_by_column_values.items.length > 0) {
-            return response.data.data.items_page_by_column_values.items[0].id;  // Retourne l'ID du premier élément correspondant
+            return response.data.data.items_page_by_column_values.items[0].id;
         } else {
             console.log("Aucun élément trouvé avec ce nom:", itemName);
             return null;
@@ -131,7 +145,7 @@ async function findItemByName(boardId, itemName) {
 }
 
 async function updateTextColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let formattedValue = '""';
 
     if (value && value.value !== undefined && typeof value.value === 'string') {
         formattedValue = `"${value.value.replace(/"/g, '\\"')}"`;
@@ -149,7 +163,7 @@ async function updateTextColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -168,7 +182,7 @@ async function updateTextColumn(boardId, itemId, columnId, value) {
 }
 
 async function updateStatusColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let formattedValue = '{}';
 
     if (value && value.label && value.label.text !== undefined) {
         formattedValue = JSON.stringify({ [columnId]: { label: value.label.text } });
@@ -186,7 +200,7 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -205,7 +219,7 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
 }
 
 async function updateDropdownColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '""'; // Valeur par défaut si la valeur est indéfinie ou nulle
+    let formattedValue = '""';
 
     if (value && value.chosenValues && value.chosenValues.length > 0) {
         const chosenValuesText = value.chosenValues.map(v => v.name).join(", ");
@@ -224,7 +238,7 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -246,13 +260,11 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
     let formattedValue;
 
     if (value && value.value !== undefined) {
-        // Si el valor no es null, lo formateamos adecuadamente
         formattedValue = value.value !== null ? `${value.value}` : 'null';
     } else {
-        formattedValue = 'null'; // Valor por defecto si la columna está vacía
+        formattedValue = 'null';
     }
 
-    // Construcción de la mutación
     const mutation = `
         mutation {
             change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": ${formattedValue}}" ) {
@@ -265,7 +277,7 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -283,9 +295,6 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
     }
 }
 
-
-
-
 async function updateTimelineColumn(boardId, itemId, columnId, value) {
     let mutation;
 
@@ -300,7 +309,6 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
             }
         `;
     } else {
-        // Clear the timeline column
         mutation = `
             mutation {
                 change_multiple_column_values(board_id: ${boardId}, item_id: ${itemId}, column_values: "{\\"${columnId}\\": null}" ) {
@@ -314,7 +322,7 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -332,10 +340,8 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
     }
 }
 
-
-
 async function updateLongTextColumn(boardId, itemId, columnId, value) {
-    let formattedValue = '{}'; // Valor por defecto si la columna está vacía
+    let formattedValue = '{}';
 
     if (value && value.text !== undefined) {
         formattedValue = JSON.stringify({ [columnId]: { text: value.text || "" } });
@@ -355,7 +361,7 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -387,7 +393,6 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
             }
         `;
     } else {
-        // Clear all people from the column
         mutation = `
             mutation {
                 change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: "{\\"clear_all\\":true}") {
@@ -401,7 +406,7 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
         method: 'post',
         url: API_URL,
         headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
         },
         data: JSON.stringify({ query: mutation })
@@ -418,7 +423,6 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
         console.error("Erreur lors de la mise à jour de la colonne de personnes:", JSON.stringify(error.response ? error.response.data : error.message));
     }
 }
-
 
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
