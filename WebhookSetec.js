@@ -379,7 +379,9 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
     let formattedValue = '{}';
 
     if (value && value.text !== undefined) {
-        formattedValue = JSON.stringify({ [columnId]: { text: value.text || "" } });
+        // Reemplazar saltos de línea con \\n para mantenerlos en la API
+        const textWithEscapedNewLines = value.text.replace(/\n/g, '\\n');
+        formattedValue = JSON.stringify({ [columnId]: { text: textWithEscapedNewLines } });
     }
 
     console.log(`Formatted value for long text column ${columnId}:`, formattedValue);
@@ -416,6 +418,7 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         addLog(`Erreur lors de la mise à jour de la colonne de long texte: ${JSON.stringify(error.response ? error.response.data : error.message)}`);
     }
 }
+
 
 async function updatePeopleColumn(boardId, itemId, columnId, value) {
     let mutation;
