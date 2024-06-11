@@ -148,7 +148,7 @@ async function findItemByName(boardIds, itemName) {
             if (response.data.data && response.data.data.boards[0].items_page.items.length > 0) {
                 const items = response.data.data.boards[0].items_page.items;
                 for (const item of items) {
-                    if (item.name === escapedItemName) {
+                    if (item.name === itemName) {  // Comparación directa sin escapado
                         return { boardId, id: item.id };
                     }
                 }
@@ -168,7 +168,7 @@ async function updateTextColumn(boardId, itemId, columnId, value) {
     let formattedValue = '""';
 
     if (value && value.value !== undefined && typeof value.value === 'string') {
-        formattedValue = `"${value.value.replace(/"/g, '\\"')}"`;
+        formattedValue = `"${value.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
     }
 
     const mutation = `
@@ -249,7 +249,7 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
 
     if (value && value.chosenValues && value.chosenValues.length > 0) {
         const chosenValuesText = value.chosenValues.map(v => v.name).join(", ");
-        formattedValue = `"${chosenValuesText.replace(/"/g, '\\"')}"`;
+        formattedValue = `"${chosenValuesText.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
     }
 
     const mutation = `
@@ -380,7 +380,7 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
 
     if (value && value.text !== undefined) {
         // Reemplazar saltos de línea con \\n para mantenerlos en la API
-        const textWithEscapedNewLines = value.text.replace(/\n/g, '\\n');
+        const textWithEscapedNewLines = value.text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
         formattedValue = JSON.stringify({ [columnId]: { text: textWithEscapedNewLines } });
     }
 
@@ -418,7 +418,6 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
         addLog(`Erreur lors de la mise à jour de la colonne de long texte: ${JSON.stringify(error.response ? error.response.data : error.message)}`);
     }
 }
-
 
 async function updatePeopleColumn(boardId, itemId, columnId, value) {
     let mutation;
@@ -471,3 +470,4 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
 });
+
