@@ -89,53 +89,69 @@ app.post('/', async (req, res) => {
 
     const log = {
         event: req.body.event,
-        message: `Handling column update: pulseName=${req.body.event.pulseName}, columnId=${req.body.event.columnId}, columnType=${req.body.event.columnType}, value=${JSON.stringify(req.body.event.value)}`
+        message: `Handling event: type=${req.body.event.type}, itemName=${req.body.event.itemName}, itemId=${req.body.event.itemId}, boardId=${req.body.event.boardId}`
     };
     console.log(log);
     addLog(`Webhook reçu: ${JSON.stringify(req.body, null, 2)}`);
     addLog(log.message);
 
     if (req.body.event) {
-        const { pulseName, columnId, value, columnType } = req.body.event;
-        const log = `Handling column update: pulseName=${pulseName}, columnId=${columnId}, columnType=${columnType}, value=${JSON.stringify(value)}`;
+        const { type, itemName, itemId, boardId, columnId, value, columnType } = req.body.event;
+        const log = `Handling event: type=${type}, itemName=${itemName}, itemId=${itemId}, boardId=${boardId}`;
         console.log(log);
         addLog(log);
 
-        const itemIds = await findItemByName(boardIds, pulseName);
-        await Promise.all(itemIds.map(async item => {
-            if (item) {
-                console.log(`Élément trouvé, ID: ${item.id}, mise à jour de la colonne.`);
-                addLog(`Élément trouvé, ID: ${item.id}, mise à jour de la colonne.`);
-                switch (columnType) {
-                    case "color":
-                        await updateStatusColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    case "dropdown":
-                        await updateDropdownColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    case "numeric":
-                        await updateNumberColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    case "timerange":
-                        await updateTimelineColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    case "long-text":
-                        await updateLongTextColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    case "multiple-person":
-                        await updatePeopleColumn(item.boardId, item.id, columnId, value);
-                        break;
-                    default:
-                        await updateTextColumn(item.boardId, item.id, columnId, value);
+        if (type === 'delete_pulse') {
+            console.log(`Item deleted: ID=${itemId}, Name=${itemName}, BoardID=${boardId}`);
+            addLog(`Item deleted: ID=${itemId}, Name=${itemName}, BoardID=${boardId}`);
+
+            // Find and delete items with the same name in other boards
+            const itemIds = await findItemByName(boardIds, itemName);
+            await Promise.all(itemIds.map(async item => {
+                if (item) {
+                    console.log(`Élément trouvé pour suppression, ID: ${item.id}, BoardID: ${item.boardId}`);
+                    addLog(`Élément trouvé pour suppression, ID: ${item.id}, BoardID: ${item.boardId}`);
+                    await deleteItem(item.id);
                 }
-            } else {
-                console.log(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
-                addLog(`Aucun élément trouvé avec le nom '${pulseName}' à mettre à jour.`);
-            }
-        }));
+            }));
+        } else {
+            const itemIds = await findItemByName(boardIds, itemName);
+            await Promise.all(itemIds.map(async item => {
+                if (item) {
+                    console.log(`Élément trouvé, ID: ${item.id}, mise à jour de la colonne.`);
+                    addLog(`Élément trouvé, ID: ${item.id}, mise à jour de la colonne.`);
+                    switch (columnType) {
+                        case "color":
+                            await updateStatusColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        case "dropdown":
+                            await updateDropdownColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        case "numeric":
+                            await updateNumberColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        case "timerange":
+                            await updateTimelineColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        case "long-text":
+                            await updateLongTextColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        case "multiple-person":
+                            await updatePeopleColumn(item.boardId, item.id, columnId, value);
+                            break;
+                        default:
+                            await updateTextColumn(item.boardId, item.id, columnId, value);
+                    }
+                } else {
+                    console.log(`Aucun élément trouvé avec le nom '${itemName}' à mettre à jour.`);
+                    addLog(`Aucun élément trouvé avec le nom '${itemName}' à mettre à jour.`);
+                }
+            }));
+        }
     }
     res.status(200).send('Webhook traité');
 });
+
 
 async function findItemByName(boardIds, itemName) {
     const escapedItemName = itemName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -490,6 +506,43 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
         addLog(`Erreur lors de la mise à jour de la colonne de personnes: ${JSON.stringify(error.response ? error.response.data : error.message)}`);
     }
 }
+
+async function deleteItem(itemId) {
+    const mutation = `
+        mutation {
+            delete_item(item_id: ${itemId}) {
+                id
+            }
+        }
+    `;
+
+    const config = {
+        method: 'post',
+        url: API_URL,
+        headers: {
+            'Authorization': `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ query: mutation })
+    };
+
+    try {
+        const response = await trackRequest(config);
+        if (response.data.errors) {
+            console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
+            addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
+        } else {
+            console.log("Item supprimé avec succès:", JSON.stringify(response.data));
+            addLog(`Item supprimé avec succès: ${JSON.stringify(response.data)}`);
+        }
+    } catch (error) {
+        console.error("Erreur lors de la suppression de l'item:", JSON.stringify(error.response ? error.response.data : error.message));
+        addLog(`Erreur lors de la suppression de l'item: ${JSON.stringify(error.response ? error.response.data : error.message)}`);
+    }
+}
+
+
+
 
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
