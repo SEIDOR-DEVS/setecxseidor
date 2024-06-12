@@ -17,6 +17,12 @@ if (!API_KEY || !API_URL) {
 }
 
 const logs = [];
+let requestCount = 0;
+
+const trackRequest = async (config) => {
+    requestCount++;
+    return axios(config);
+};
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
@@ -56,6 +62,24 @@ const addLog = (log) => {
     if (logs.length > 100) logs.shift();
     logListeners.forEach(listener => listener(formattedLog));
 };
+
+app.get('/request-count', (req, res) => {
+    res.status(200).send(`
+        <html>
+        <body>
+            <p>Request Count: ${requestCount}</p>
+            <form action="/reset-count" method="POST">
+                <button type="submit">Reset Count</button>
+            </form>
+        </body>
+        </html>
+    `);
+});
+
+app.post('/reset-count', (req, res) => {
+    requestCount = 0;
+    res.redirect('/request-count');
+});
 
 app.post('/', async (req, res) => {
     if (req.body.challenge) {
@@ -142,7 +166,7 @@ async function findItemByName(boardIds, itemName) {
         };
 
         try {
-            const response = await axios(config);
+            const response = await trackRequest(config);
             console.log("Réponse de la recherche d'éléments:", JSON.stringify(response.data, null, 2));
             addLog(`Réponse de la recherche d'éléments: ${JSON.stringify(response.data, null, 2)}`);
             if (response.data.data && response.data.data.boards[0].items_page.items.length > 0) {
@@ -190,7 +214,7 @@ async function updateTextColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -230,7 +254,7 @@ async function updateStatusColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -271,7 +295,7 @@ async function updateDropdownColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -313,7 +337,7 @@ async function updateNumberColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -361,7 +385,7 @@ async function updateTimelineColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -405,7 +429,7 @@ async function updateLongTextColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -453,7 +477,7 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
     };
 
     try {
-        const response = await axios(config);
+        const response = await trackRequest(config);
         if (response.data.errors) {
             console.error("Erreur dans l'API:", JSON.stringify(response.data.errors));
             addLog(`Erreur dans l'API: ${JSON.stringify(response.data.errors)}`);
@@ -470,4 +494,3 @@ async function updatePeopleColumn(boardId, itemId, columnId, value) {
 app.listen(PORT, () => {
     console.log(`Serveur à l'écoute sur le port ${PORT}`);
 });
-
