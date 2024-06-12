@@ -89,24 +89,33 @@ app.post('/', async (req, res) => {
 
     const log = {
         event: req.body.event,
-        message: `Handling event: type=${req.body.event.type}, itemName=${req.body.event.itemName}, itemId=${req.body.event.itemId}, boardId=${req.body.event.boardId}`
+        message: `Handling event: type=${req.body.event.type}, itemName=${req.body.event.pulseName || req.body.event.itemName}, itemId=${req.body.event.pulseId || req.body.event.itemId}, boardId=${req.body.event.boardId}`
     };
     console.log(log);
     addLog(`Webhook reçu: ${JSON.stringify(req.body, null, 2)}`);
     addLog(log.message);
 
     if (req.body.event) {
-        const { type, itemName, itemId, boardId, columnId, value, columnType } = req.body.event;
-        const log = `Handling event: type=${type}, itemName=${itemName}, itemId=${itemId}, boardId=${boardId}`;
+        const { type, pulseName, pulseId, itemName, itemId, boardId, columnId, value, columnType } = req.body.event;
+        const actualItemName = pulseName || itemName;
+        const actualItemId = pulseId || itemId;
+
+        const log = `Handling event: type=${type}, itemName=${actualItemName}, itemId=${actualItemId}, boardId=${boardId}`;
         console.log(log);
         addLog(log);
 
+        if (!actualItemName) {
+            console.log('itemName or pulseName is undefined');
+            addLog('itemName or pulseName is undefined');
+            return res.status(400).send('itemName or pulseName is undefined');
+        }
+
         if (type === 'delete_pulse') {
-            console.log(`Item deleted: ID=${itemId}, Name=${itemName}, BoardID=${boardId}`);
-            addLog(`Item deleted: ID=${itemId}, Name=${itemName}, BoardID=${boardId}`);
+            console.log(`Item deleted: ID=${actualItemId}, Name=${actualItemName}, BoardID=${boardId}`);
+            addLog(`Item deleted: ID=${actualItemId}, Name=${actualItemName}, BoardID=${boardId}`);
 
             // Find and delete items with the same name in other boards
-            const itemIds = await findItemByName(boardIds, itemName);
+            const itemIds = await findItemByName(boardIds, actualItemName);
             await Promise.all(itemIds.map(async item => {
                 if (item) {
                     console.log(`Élément trouvé pour suppression, ID: ${item.id}, BoardID: ${item.boardId}`);
@@ -115,7 +124,7 @@ app.post('/', async (req, res) => {
                 }
             }));
         } else {
-            const itemIds = await findItemByName(boardIds, itemName);
+            const itemIds = await findItemByName(boardIds, actualItemName);
             await Promise.all(itemIds.map(async item => {
                 if (item) {
                     console.log(`Élément trouvé, ID: ${item.id}, mise à jour de la colonne.`);
@@ -143,8 +152,8 @@ app.post('/', async (req, res) => {
                             await updateTextColumn(item.boardId, item.id, columnId, value);
                     }
                 } else {
-                    console.log(`Aucun élément trouvé avec le nom '${itemName}' à mettre à jour.`);
-                    addLog(`Aucun élément trouvé avec le nom '${itemName}' à mettre à jour.`);
+                    console.log(`Aucun élément trouvé avec le nom '${actualItemName}' à mettre à jour.`);
+                    addLog(`Aucun élément trouvé avec le nom '${actualItemName}' à mettre à jour.`);
                 }
             }));
         }
@@ -154,6 +163,10 @@ app.post('/', async (req, res) => {
 
 
 async function findItemByName(boardIds, itemName) {
+    if (!itemName) {
+        throw new Error("itemName is undefined");
+    }
+
     const escapedItemName = itemName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const items = await Promise.all(boardIds.map(async boardId => {
         const query = JSON.stringify({
